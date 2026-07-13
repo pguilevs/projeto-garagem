@@ -1,62 +1,130 @@
 # Portal AutoEstoque
 
-Portal mobile-first para gestão e consulta de uma frota de veículos. O projeto possui uma visão administrativa para cadastrar e atualizar veículos e uma visão de vendedor que exibe somente o estoque disponível.
+Portal mobile-first para gestao e consulta de estoque de veiculos. A aplicacao roda em Next.js no Vercel e usa MongoDB Atlas com Mongoose para persistencia.
 
-## Funcionalidades
+## Stack
 
-- Catálogo responsivo com busca e filtros
-- Perfis demonstrativos de Vendedor e Administrativo
-- Cadastro e edição de veículos
-- Status: cadastrado, disponível, reservado e vendido
-- Histórico de mudanças de status
-- Registro de quilometragem, placa, avarias e observações
-- Upload e armazenamento de fotos
-- Validação de placa duplicada
-- Persistência em banco Cloudflare D1
-- Armazenamento de imagens em Cloudflare R2
+- Node.js 22+
+- Next.js
+- MongoDB Atlas
+- Mongoose
+- JWT
+- bcrypt
+- dotenv
 
-## Tecnologias
+## Configuracao
 
-- React 19 e TypeScript
-- Next.js/Vinext e Vite
-- Cloudflare Workers
-- Cloudflare D1 com Drizzle ORM
-- Cloudflare R2
-
-## Requisitos
-
-- Node.js 22.13 ou superior
-- npm
-- Linux ou WSL para utilizar os scripts de desenvolvimento incluídos
-
-## Executar localmente
+1. Instale as dependencias:
 
 ```bash
 npm install
-npm run dev
 ```
 
-Depois, abra o endereço informado no terminal. O ambiente local simula os vínculos de banco e armazenamento declarados em `.openai/hosting.json`.
+2. Crie um arquivo `.env.local` a partir de `.env.example`.
+
+3. Preencha as variaveis:
+
+```env
+MONGODB_URI=
+JWT_SECRET=
+JWT_EXPIRES_IN=8h
+ADMIN_NOME=
+ADMIN_EMAIL=
+ADMIN_SENHA=
+VENDEDOR_NOME=
+VENDEDOR_EMAIL=
+VENDEDOR_SENHA=
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
+```
+
+No Vercel, cadastre essas variaveis em Project Settings > Environment Variables.
+
+## Como obter a MONGODB_URI
+
+1. Acesse MongoDB Atlas.
+2. Crie um cluster.
+3. Em Database Access, crie um usuario com senha.
+4. Em Network Access, libere o IP usado pelo ambiente ou use `0.0.0.0/0` apenas se aceitar esse risco.
+5. Clique em Connect > Drivers.
+6. Copie a string `mongodb+srv://...`.
+7. Substitua usuario, senha e nome do banco, por exemplo:
+
+```env
+MONGODB_URI=mongodb+srv://usuario:senha@cluster0.xxxxx.mongodb.net/portal-autoestoque?retryWrites=true&w=majority
+```
+
+## Seed
+
+Depois de configurar as variaveis:
+
+```bash
+npm run seed
+```
+
+O seed cria:
+
+- administrador inicial
+- concessionaria inicial
+- vendedor inicial
+- veiculos de demonstracao
+
+As credenciais iniciais vem das variaveis `ADMIN_*` e `VENDEDOR_*`.
 
 ## Comandos
 
 ```bash
-npm run dev          # inicia o ambiente de desenvolvimento
-npm run build        # gera e valida a versão de produção
-npm test             # executa a validação automatizada
-npm run lint         # verifica o código
-npm run db:generate  # gera migrações após alterar o schema
+npm run dev      # ambiente local
+npm run build    # build de producao usado pelo Vercel
+npm test         # build/check atual
+npm run seed     # popula MongoDB Atlas
 ```
 
-## Estrutura principal
+## Permissoes
 
-- `app/`: interface e rotas da API
-- `db/`: conexão e modelo do banco
-- `drizzle/`: migrações do banco
-- `public/`: arquivos públicos
-- `worker/`: entrada do Cloudflare Worker
-- `tests/`: testes automatizados
+Administrador:
 
-## Observações
+- visualiza todos os veiculos
+- cadastra, edita e remove veiculos
+- altera status
+- visualiza historico
+- cadastra usuarios e concessionarias
 
-A alternância entre Vendedor e Administrativo ainda é demonstrativa. Antes do uso comercial, implemente autenticação real e autorização das rotas administrativas no servidor. Não envie arquivos `.env` ou credenciais para repositórios públicos.
+Vendedor:
+
+- visualiza somente veiculos disponiveis
+- consulta detalhes e avarias
+- cria reservas
+- nao acessa dados administrativos
+
+As permissoes sao validadas no backend via JWT e perfil.
+
+## Imagens
+
+O MongoDB armazena apenas URL e identificador publico. A camada `services/cloudinary.ts` prepara a integracao com Cloudinary. Enquanto as credenciais nao forem configuradas, o cadastro aceita URL direta de imagem.
+
+## Endpoints principais
+
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `POST /api/usuarios`
+- `GET /api/usuarios`
+- `PATCH /api/usuarios/:id`
+- `POST /api/concessionarias`
+- `GET /api/concessionarias`
+- `PATCH /api/concessionarias/:id`
+- `POST /api/veiculos`
+- `GET /api/veiculos`
+- `GET /api/veiculos/:id`
+- `PATCH /api/veiculos/:id`
+- `DELETE /api/veiculos/:id`
+- `PATCH /api/veiculos/:id/status`
+- `GET /api/veiculos/:id/historico`
+- `POST /api/reservas`
+- `GET /api/reservas`
+- `PATCH /api/reservas/:id/status`
+
+## Observacoes
+
+O backend usa MongoDB Atlas via Mongoose. Nao coloque credenciais no codigo nem commite `.env.local`.
