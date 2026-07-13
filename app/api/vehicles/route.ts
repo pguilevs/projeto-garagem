@@ -1,34 +1,43 @@
-import { and, asc, desc, eq, like, or } from "drizzle-orm";
-import { getDb } from "../../../db";
-import { statusHistory, vehicles } from "../../../db/schema";
-
-const allowedStatuses = new Set(["cadastrado", "disponivel", "reservado", "vendido"]);
+import { getStore, isStatus, normalizeVehicleInput } from "../../../lib/store";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const status = url.searchParams.get("status");
-  const search = url.searchParams.get("search")?.trim();
-  const db = await getDb();
-  const filters = [];
-  if (status && allowedStatuses.has(status)) filters.push(eq(vehicles.status, status as "cadastrado"|"disponivel"|"reservado"|"vendido"));
-  if (search) filters.push(or(like(vehicles.brand, `%${search}%`), like(vehicles.model, `%${search}%`), like(vehicles.plate, `%${search}%`))!);
-  const rows = await db.select().from(vehicles).where(filters.length ? and(...filters) : undefined).orderBy(asc(vehicles.status), desc(vehicles.updatedAt));
-  return Response.json({ vehicles: rows });
+  const search = url.searchParams.get("search")?.trim().toLowerCase();
+  const store = getStore();
+  const vehicles = store.vehicles
+    .filter((vehicle) => !status || !isStatus(status) || vehicle.status === status)
+    .filter((vehicle) => {
+      if (!search) return true;
+      return `${vehicle.brand} ${vehicle.model} ${vehicle.plate}`
+        .toLowerCase()
+        .includes(search);
+    })
+    .sort((a, b) => a.status.localeCompare(b.status) || b.updatedAt.localeCompare(a.updatedAt));
+
+  return Response.json({ vehicles });
 }
 
 export async function POST(request: Request) {
-  const input = await request.json() as Record<string, unknown>;
-  const brand = String(input.brand ?? "").trim(); const model = String(input.model ?? "").trim();
-  const year = String(input.year ?? "").trim(); const plate = String(input.plate ?? "").trim().toUpperCase();
-  const mileage = Number(input.mileage); const status = String(input.status ?? "cadastrado");
-  if (!brand || !model || !year || !plate || !Number.isFinite(mileage) || mileage < 0 || !allowedStatuses.has(status)) return Response.json({ error: "Preencha corretamente os campos obrigatórios." }, { status: 400 });
-  try {
-    const db = await getDb(); const now = new Date();
-    const [vehicle] = await db.insert(vehicles).values({ brand, model, year, plate, mileage, status: status as any, damages: Array.isArray(input.damages) ? input.damages.map(String) : [], notes: String(input.notes ?? ""), photoUrl: input.photoUrl ? String(input.photoUrl) : null, color: String(input.color ?? "#69706f"), createdAt: now, updatedAt: now }).returning();
-    await db.insert(statusHistory).values({ vehicleId: vehicle.id, previousStatus: null, newStatus: status, reason: "Cadastro inicial" });
-    return Response.json({ vehicle }, { status: 201 });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Falha ao cadastrar";
-    return Response.json({ error: message.includes("UNIQUE") ? "Já existe um veículo com esta placa." : message }, { status: 409 });
+  const input = (await request.json()) as Record<string, unknown>;
+  const values = normalizeVehicleInput(input);
+  if (!values) {
+    return Response.json({ error: "Preencha corretamente os campos obrigatorios." }, { status: 400 });
   }
+
+  const store = getStore();
+  if (store.vehicles.some((vehicle) => vehicle.plate === values.plate)) {
+    return Response.json({ error: "Ja existe um veiculo com esta placa." }, { status: 409 });
+  }
+
+  const timestamp = new Date().toISOString();
+  const vehicle = {
+    id: store.nextId++,
+    ...values,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+  store.vehicles.push(vehicle);
+
+  return Response.json({ vehicle }, { status: 201 });
 }
