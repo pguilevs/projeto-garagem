@@ -1,0 +1,15 @@
+{
+  "name": "estoque-veiculos-mvp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MVP B2B para gerenciamento e consulta de estoque de veiculos",
+  "scripts": {
+    "dev": "vercel dev"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "vercel": "^44.0.0"
+  }
+}
